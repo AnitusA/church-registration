@@ -2,7 +2,6 @@ import type { MetaFunction, ActionFunctionArgs, LoaderFunctionArgs } from "@remi
 import { json, redirect } from "@remix-run/node";
 import { Form, Link, useActionData, useNavigation } from "@remix-run/react";
 import { createSupabaseServerClient } from "~/utils/supabase.server";
-import { useState } from "react";
 
 export const meta: MetaFunction = () => [
   { title: "Join Grace Community Church - Create Account" },
@@ -34,79 +33,106 @@ export async function action({ request }: ActionFunctionArgs) {
   const password = formData.get("password")?.toString() || "";
   const confirmPassword = formData.get("confirmPassword")?.toString() || "";
 
+  // Debug logging
+  console.log("Registration attempt:", { name, email, phone, dateOfBirth, church, passwordLength: password.length });
+
   // Validation
   if (!name.trim()) {
+    console.log("Validation failed: Missing name");
     return json({ error: "Please enter your full name" }, { status: 400 });
   }
 
   if (!email.includes("@")) {
+    console.log("Validation failed: Invalid email");
     return json({ error: "Please enter a valid email address" }, { status: 400 });
   }
 
   if (!phone.trim()) {
+    console.log("Validation failed: Missing phone");
     return json({ error: "Please enter your phone number" }, { status: 400 });
   }
 
   if (!dateOfBirth) {
+    console.log("Validation failed: Missing date of birth");
     return json({ error: "Please enter your date of birth" }, { status: 400 });
   }
 
   if (!church) {
+    console.log("Validation failed: Missing church");
     return json({ error: "Please select your church" }, { status: 400 });
   }
 
   if (password.length < 6) {
+    console.log("Validation failed: Password too short");
     return json({ error: "Password must be at least 6 characters" }, { status: 400 });
   }
 
   if (password !== confirmPassword) {
+    console.log("Validation failed: Password mismatch");
     return json({ error: "Passwords do not match" }, { status: 400 });
   }
 
-  // Create user with Supabase Auth
-  const { data: authData, error: authError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        name,
-        phone,
-        date_of_birth: dateOfBirth,
-        church,
-      }
-    }
-  });
-
-  if (authError) {
-    return json(
-      { error: authError.message || "Failed to create account" },
-      { status: 400, headers: response.headers }
-    );
-  }
-
-  // Store additional user data in a profiles table
-  if (authData.user) {
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .insert([
-        {
-          id: authData.user.id,
+  try {
+    console.log("Attempting Supabase signup...");
+    // Create user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
           name,
-          email,
           phone,
           date_of_birth: dateOfBirth,
           church,
-          created_at: new Date().toISOString()
         }
-      ]);
+      }
+    });
 
-    if (profileError) {
-      console.error('Profile creation error:', profileError);
-      // We don't return an error here as the user account was created successfully
+    if (authError) {
+      console.error("Supabase auth error:", authError);
+      return json(
+        { error: authError.message || "Failed to create account" },
+        { status: 400, headers: response.headers }
+      );
     }
-  }
 
-  return redirect("/dashboard", { headers: response.headers });
+    console.log("Supabase signup successful, user ID:", authData.user?.id);
+
+    // Store additional user data in a profiles table
+    if (authData.user) {
+      console.log("Inserting profile data...");
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: authData.user.id,
+            name,
+            email,
+            phone,
+            date_of_birth: dateOfBirth,
+            church,
+            created_at: new Date().toISOString()
+          }
+        ]);
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        // We don't return an error here as the user account was created successfully
+      } else {
+        console.log("Profile created successfully");
+      }
+    }
+
+    console.log("Registration complete, redirecting to dashboard");
+    return redirect("/dashboard", { headers: response.headers });
+
+  } catch (error) {
+    console.error("Unexpected error during registration:", error);
+    return json(
+      { error: "An unexpected error occurred. Please try again." },
+      { status: 500, headers: response.headers }
+    );
+  }
 }
 
 export default function RegisterPage() {
@@ -214,7 +240,7 @@ export default function RegisterPage() {
                         autoComplete="tel"
                         required
                         className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50/50 focus:bg-white text-gray-900 placeholder-gray-400"
-                        placeholder="+91 00004567"
+                        placeholder="+1 (555) 123-4567"
                       />
                     </div>
                   </div>
@@ -261,7 +287,7 @@ export default function RegisterPage() {
                         name="dateOfBirth"
                         type="date"
                         required
-                        className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50/50 focus:bg-white text-gray-900 hover:border-gray-300 focus:shadow-lg cursor-pointer"
+                        className="w-full pl-11 pr-10 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50/50 focus:bg-white text-gray-900 hover:border-gray-300 focus:shadow-lg cursor-pointer"
                         max={new Date().toISOString().split('T')[0]}
                       />
                       <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
@@ -282,7 +308,6 @@ export default function RegisterPage() {
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400 group-focus-within:text-indigo-500 transition-colors" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                         <path d="M10 2L3 7v11a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V7l-7-5z"/>
-                        <path d="M10 0l10 6v12a2 2 0 01-2 2H2a2 2 0 01-2-2V6L10 0zm0 2.5L2 7v11h16V7L10 2.5z" opacity="0.6"/>
                       </svg>
                     </div>
                     <select
