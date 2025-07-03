@@ -283,7 +283,7 @@ export default function RegisterPage() {
                         autoComplete="tel"
                         required
                         className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50/50 focus:bg-white text-gray-900 placeholder-gray-400"
-                        placeholder="+1 (555) 123-4567"
+                        placeholder="+91 9000045607"
                       />
                     </div>
                   </div>
