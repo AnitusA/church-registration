@@ -22,58 +22,88 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const response = new Response();
-  const supabase = createSupabaseServerClient({ request, response });
-  const formData = await request.formData();
   
-  const name = formData.get("name")?.toString() || "";
-  const email = formData.get("email")?.toString() || "";
-  const phone = formData.get("phone")?.toString() || "";
-  const dateOfBirth = formData.get("dateOfBirth")?.toString() || "";
-  const church = formData.get("church")?.toString() || "";
-  const password = formData.get("password")?.toString() || "";
-  const confirmPassword = formData.get("confirmPassword")?.toString() || "";
-
-  // Debug logging
-  console.log("Registration attempt:", { name, email, phone, dateOfBirth, church, passwordLength: password.length });
-
-  // Validation
-  if (!name.trim()) {
-    console.log("Validation failed: Missing name");
-    return json({ error: "Please enter your full name" }, { status: 400 });
-  }
-
-  if (!email.includes("@")) {
-    console.log("Validation failed: Invalid email");
-    return json({ error: "Please enter a valid email address" }, { status: 400 });
-  }
-
-  if (!phone.trim()) {
-    console.log("Validation failed: Missing phone");
-    return json({ error: "Please enter your phone number" }, { status: 400 });
-  }
-
-  if (!dateOfBirth) {
-    console.log("Validation failed: Missing date of birth");
-    return json({ error: "Please enter your date of birth" }, { status: 400 });
-  }
-
-  if (!church) {
-    console.log("Validation failed: Missing church");
-    return json({ error: "Please select your church" }, { status: 400 });
-  }
-
-  if (password.length < 6) {
-    console.log("Validation failed: Password too short");
-    return json({ error: "Password must be at least 6 characters" }, { status: 400 });
-  }
-
-  if (password !== confirmPassword) {
-    console.log("Validation failed: Password mismatch");
-    return json({ error: "Passwords do not match" }, { status: 400 });
-  }
+  console.log("=== Registration Action Started ===");
+  console.log("Supabase URL:", process.env.SUPABASE_URL);
+  console.log("Supabase Key present:", !!process.env.SUPABASE_ANON_KEY);
+  console.log("Supabase Key length:", process.env.SUPABASE_ANON_KEY?.length);
 
   try {
-    console.log("Attempting Supabase signup...");
+    const supabase = createSupabaseServerClient({ request, response });
+    console.log("Supabase client created successfully");
+    
+    const formData = await request.formData();
+    console.log("Form data extracted");
+    
+    const name = formData.get("name")?.toString() || "";
+    const email = formData.get("email")?.toString() || "";
+    const phone = formData.get("phone")?.toString() || "";
+    const dateOfBirth = formData.get("dateOfBirth")?.toString() || "";
+    const church = formData.get("church")?.toString() || "";
+    const password = formData.get("password")?.toString() || "";
+    const confirmPassword = formData.get("confirmPassword")?.toString() || "";
+
+    console.log("Form fields:", { 
+      name: name.length, 
+      email: email.length, 
+      phone: phone.length, 
+      dateOfBirth, 
+      church: church.length,
+      passwordLength: password.length
+    });
+
+    // Validation
+    if (!name.trim()) {
+      console.log("❌ Validation failed: Missing name");
+      return json({ error: "Please enter your full name" }, { status: 400 });
+    }
+
+    if (!email.includes("@")) {
+      console.log("❌ Validation failed: Invalid email");
+      return json({ error: "Please enter a valid email address" }, { status: 400 });
+    }
+
+    if (!phone.trim()) {
+      console.log("❌ Validation failed: Missing phone");
+      return json({ error: "Please enter your phone number" }, { status: 400 });
+    }
+
+    if (!dateOfBirth) {
+      console.log("❌ Validation failed: Missing date of birth");
+      return json({ error: "Please enter your date of birth" }, { status: 400 });
+    }
+
+    if (!church) {
+      console.log("❌ Validation failed: Missing church");
+      return json({ error: "Please select your church" }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      console.log("❌ Validation failed: Password too short");
+      return json({ error: "Password must be at least 6 characters" }, { status: 400 });
+    }
+
+    if (password !== confirmPassword) {
+      console.log("❌ Validation failed: Password mismatch");
+      return json({ error: "❌ Passwords do not match. Please make sure both password fields are identical." }, { status: 400 });
+    }
+
+    console.log("✅ All validations passed");
+
+    // Test Supabase connection first
+    try {
+      const { data: connectionTest, error: connectionError } = await supabase.auth.getSession();
+      console.log("Supabase connection test:", { 
+        success: !connectionError, 
+        error: connectionError?.message 
+      });
+    } catch (connErr) {
+      console.error("Supabase connection failed:", connErr);
+      return json({ error: "Database connection failed" }, { status: 500 });
+    }
+
+    console.log("🚀 Attempting Supabase signup...");
+
     // Create user with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -89,47 +119,33 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     if (authError) {
-      console.error("Supabase auth error:", authError);
+      console.error("❌ Supabase auth error:", {
+        message: authError.message,
+        status: authError.status,
+        details: authError
+      });
       return json(
         { error: authError.message || "Failed to create account" },
         { status: 400, headers: response.headers }
       );
     }
 
-    console.log("Supabase signup successful, user ID:", authData.user?.id);
+    console.log("✅ Supabase signup successful!", { 
+      userId: authData.user?.id,
+      userEmail: authData.user?.email,
+      confirmed: authData.user?.email_confirmed_at
+    });
 
-    // Store additional user data in a profiles table
-    if (authData.user) {
-      console.log("Inserting profile data...");
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: authData.user.id,
-            name,
-            email,
-            phone,
-            date_of_birth: dateOfBirth,
-            church,
-            created_at: new Date().toISOString()
-          }
-        ]);
+    // For now, skip the profiles table insert to test basic auth
+    console.log("⏭️ Skipping profile creation for initial test");
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        // We don't return an error here as the user account was created successfully
-      } else {
-        console.log("Profile created successfully");
-      }
-    }
-
-    console.log("Registration complete, redirecting to dashboard");
+    console.log("🎉 Registration complete, redirecting to dashboard");
     return redirect("/dashboard", { headers: response.headers });
 
   } catch (error) {
-    console.error("Unexpected error during registration:", error);
+    console.error("💥 Unexpected error during registration:", error);
     return json(
-      { error: "An unexpected error occurred. Please try again." },
+      { error: `Server error: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500, headers: response.headers }
     );
   }
@@ -149,6 +165,33 @@ export default function RegisterPage() {
     "Grace Community Church - West Campus",
     "Other Church",
   ];
+
+  // Client-side password validation
+  const handlePasswordValidation = () => {
+    const password = document.getElementById('password') as HTMLInputElement;
+    const confirmPassword = document.getElementById('confirmPassword') as HTMLInputElement;
+    const errorDiv = document.getElementById('password-error');
+    
+    if (password?.value && confirmPassword?.value) {
+      if (password.value !== confirmPassword.value) {
+        if (errorDiv) {
+          errorDiv.textContent = "❌ Passwords do not match";
+          errorDiv.className = "mt-1 text-sm text-red-600 font-medium";
+        }
+        confirmPassword.classList.add('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+        confirmPassword.classList.remove('border-gray-200', 'focus:border-transparent', 'focus:ring-indigo-500');
+      } else {
+        if (errorDiv) {
+          errorDiv.textContent = "✅ Passwords match";
+          errorDiv.className = "mt-1 text-sm text-green-600 font-medium";
+        }
+        confirmPassword.classList.remove('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+        confirmPassword.classList.add('border-gray-200', 'focus:border-transparent', 'focus:ring-indigo-500');
+      }
+    } else if (errorDiv) {
+      errorDiv.textContent = "";
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 flex items-center justify-center p-4 relative overflow-hidden">
@@ -349,6 +392,7 @@ export default function RegisterPage() {
                         type="password"
                         autoComplete="new-password"
                         required
+                        onChange={handlePasswordValidation}
                         className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50/50 focus:bg-white text-gray-900 placeholder-gray-400"
                         placeholder="••••••••"
                       />
@@ -373,10 +417,12 @@ export default function RegisterPage() {
                         type="password"
                         autoComplete="new-password"
                         required
+                        onChange={handlePasswordValidation}
                         className="w-full pl-11 pr-4 py-3.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 bg-gray-50/50 focus:bg-white text-gray-900 placeholder-gray-400"
                         placeholder="••••••••"
                       />
                     </div>
+                    <div id="password-error" className="mt-1 text-sm"></div>
                   </div>
                 </div>
               </div>
