@@ -1,6 +1,17 @@
 import { useState } from "react";
 
-export default function AddParticipantForm({ onSave, currentCount }) {
+type AddParticipantFormProps = {
+  onSave: (participant: {
+    name: string;
+    role: string;
+    section: string | null;
+    competition: string[];
+    participantId: string;
+  }) => void;
+  currentCount: number;
+};
+
+export default function AddParticipantForm({ onSave, currentCount }: AddParticipantFormProps) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("student");
   const [section, setSection] = useState("nursery");
@@ -65,10 +76,11 @@ export default function AddParticipantForm({ onSave, currentCount }) {
 
       {/* Role */}
       <div>
-        <label className="block mb-2 text-lg font-semibold text-gray-800">
+        <label htmlFor="role-select" className="block mb-2 text-lg font-semibold text-gray-800">
           Role
         </label>
         <select
+          id="role-select"
           className="w-full px-4 py-3 text-lg text-black bg-white border border-orange-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-400"
           value={role}
           onChange={(e) => setRole(e.target.value)}
@@ -81,10 +93,11 @@ export default function AddParticipantForm({ onSave, currentCount }) {
       {/* Section (only for students) */}
       {role === "student" && (
         <div>
-          <label className="block mb-2 text-lg font-semibold text-gray-800">
+          <label htmlFor="section-select" className="block mb-2 text-lg font-semibold text-gray-800">
             Section
           </label>
           <select
+            id="section-select"
             className="w-full px-4 py-3 text-lg text-black bg-white border border-orange-300 rounded focus:outline-none focus:ring-2 focus:ring-orange-400"
             value={section}
             onChange={(e) => setSection(e.target.value)}
