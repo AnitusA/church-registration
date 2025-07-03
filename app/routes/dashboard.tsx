@@ -3,9 +3,26 @@ import { supabase } from "~/utils/supabase.client";
 import Sidebar from "~/components/Sidebar";
 import AddParticipantForm from "~/components/AddParticipantForm";
 
+interface Participant {
+  participant_id: string;
+  name: string;
+  role: string;
+  section?: string;
+  competitions?: string[];
+  secretary_id: string;
+}
+
+interface NewParticipant {
+  name: string;
+  role: string;
+  section?: string | null;
+  competition?: string[];
+  participantId: string;
+}
+
 export default function SecretaryDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [participants, setParticipants] = useState([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [showForm, setShowForm] = useState(false);
 
   const secretary = {
@@ -34,23 +51,26 @@ export default function SecretaryDashboard() {
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  const handleAddParticipant = async (newParticipant) => {
-    const { error } = await supabase.from("participants").insert([
-      {
-        name: newParticipant.name,
-        role: newParticipant.role,
-        section: newParticipant.section,
-        competitions: newParticipant.competition,
-        participant_id: newParticipant.participantId,
-        secretary_id: secretary.id,
-      },
-    ]);
+  const handleAddParticipant = async (newParticipant: NewParticipant) => {
+    const participantData = {
+      name: newParticipant.name,
+      role: newParticipant.role,
+      section: newParticipant.section || null,
+      competitions: newParticipant.competition || [],
+      participant_id: newParticipant.participantId,
+      secretary_id: secretary.id,
+    };
+
+    const { error, data } = await supabase.from("participants").insert([participantData]).select();
 
     if (error) {
       console.error("Supabase insert error:", error);
       alert("Failed to save participant.");
     } else {
-      setParticipants((prev) => [...prev, newParticipant]);
+      // Add the newly created participant to the state
+      if (data && data[0]) {
+        setParticipants((prev) => [...prev, data[0] as Participant]);
+      }
       setShowForm(false);
     }
   };

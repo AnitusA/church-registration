@@ -1,4 +1,15 @@
-export default function Sidebar({ secretary, close }) {
+interface Secretary {
+  name: string;
+  email?: string;
+  church?: string;
+}
+
+interface SidebarProps {
+  secretary: Secretary;
+  close: () => void;
+}
+
+export default function Sidebar({ secretary, close }: SidebarProps) {
   return (
     <div className="fixed top-0 right-0 w-72 h-full bg-white shadow-lg z-50 p-6 flex flex-col">
       <div className="flex justify-end">
