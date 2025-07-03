@@ -7,6 +7,10 @@ module.exports = {
     v3_singleFetch: true,
     v3_lazyRouteDiscovery: true,
   },
+  env: {
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+  },
   ignoredRouteFiles: ["**/.*"],
   serverModuleFormat: "esm", // Important for Vite compatibility
 };

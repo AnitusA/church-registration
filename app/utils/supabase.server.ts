@@ -1,6 +1,25 @@
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient as createRemixServerClient } from "@supabase/auth-helpers-remix";
+ 
+export const supabase = createClient(
+//   process.env.SUPABASE_URL!,
+process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
+// For auth helpers
+export function createServerClient({
+  request,
+  response,
+}: {
+  request: Request;
+  response: Response;
+}) {
+  return createRemixServerClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_ANON_KEY!,
+    { request, response }
+  );
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// export { createServetrrClient };
