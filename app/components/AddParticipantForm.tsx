@@ -13,8 +13,8 @@ type AddParticipantFormProps = {
 
 export default function AddParticipantForm({ onSave, currentCount }: AddParticipantFormProps) {
   const [name, setName] = useState("");
-  const [role, setRole] = useState("student");
-  const [section, setSection] = useState("nursery");
+  const [role, setRole] = useState("");
+  const [section, setSection] = useState("");
   const [competition, setCompetition] = useState<string[]>([]);
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,7 +36,7 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
     
     if (name.trim()) completed++;
     if (role) completed++;
-    if (role === "teacher" || section) completed++;
+    if (role === "teacher" || (role === "student" && section)) completed++;
     if (competition.length > 0) completed++;
     
     return Math.round((completed / totalFields) * 100);
@@ -51,7 +51,8 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
   }, [name, role, section, competition, currentStep]);
 
   const generateId = () => {
-    const prefix = role === "teacher" ? "T" : section[0].toUpperCase();
+    if (!role) return "---";
+    const prefix = role === "teacher" ? "T" : (section ? section[0].toUpperCase() : "S");
     const count = currentCount + 1;
     return `${prefix}${String(count).padStart(3, "0")}`;
   };
@@ -90,8 +91,8 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
 
     // Reset form
     setName("");
-    setRole("student");
-    setSection("nursery");
+    setRole("");
+    setSection("");
     setCompetition([]);
     setCurrentStep(1);
     setIsSubmitting(false);
@@ -168,7 +169,7 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
           </div>
         </div>
 
-        {/* Animated Progress Steps */}
+        {/* Dynamic Progress Steps */}
         <div className="flex items-center justify-between mb-6">
           {[1, 2, 3, 4].map((step) => (
             <div key={step} className="flex items-center flex-1">
@@ -191,7 +192,7 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
               </div>
               
               {step < 4 && (
-                <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-500 ${
+                <div className={`flex-1 h-1 mx-3 rounded-full transition-all duration-700 ${
                   currentStep > step ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-gray-200'
                 }`}>
                   {currentStep === step + 1 && (
@@ -203,12 +204,32 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
           ))}
         </div>
 
-        {/* Step Labels */}
+        {/* Dynamic Step Labels */}
         <div className="flex justify-between text-xs text-gray-500 px-2">
-          <span className={currentStep >= 1 ? 'text-blue-600 font-semibold' : ''}>Basic Info</span>
-          <span className={currentStep >= 2 ? 'text-purple-600 font-semibold' : ''}>Role & Section</span>
-          <span className={currentStep >= 3 ? 'text-green-600 font-semibold' : ''}>Competitions</span>
-          <span className={currentStep >= 4 ? 'text-orange-600 font-semibold' : ''}>Review</span>
+          <span className={`transition-all duration-300 ${
+            currentStep >= 1 ? 'text-blue-600 font-semibold' : ''
+          }`}>
+            {name ? `👤 ${name.split(' ')[0]}` : 'Enter Name'}
+          </span>
+          <span className={`transition-all duration-300 ${
+            currentStep >= 2 ? 'text-purple-600 font-semibold' : ''
+          }`}>
+            {!role ? 'Choose Role' :
+             role === 'student' ? 
+              (section ? `🎓 ${section.charAt(0).toUpperCase() + section.slice(1)} Student` : '🎓 Choose Section') : 
+              '👨‍🏫 Teacher'
+            }
+          </span>
+          <span className={`transition-all duration-300 ${
+            currentStep >= 3 ? 'text-green-600 font-semibold' : ''
+          }`}>
+            {competition.length > 0 ? `🏆 ${competition.length} Event${competition.length > 1 ? 's' : ''}` : 'Select Events'}
+          </span>
+          <span className={`transition-all duration-300 ${
+            currentStep >= 4 ? 'text-orange-600 font-semibold' : ''
+          }`}>
+            {getFormCompletion() === 100 ? '✅ Ready to Submit' : 'Review & Submit'}
+          </span>
         </div>
       </div>
 
@@ -312,8 +333,11 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
                         aria-label="Select participant role"
                         value={role}
                         onChange={(e) => setRole(e.target.value)}
-                        className="w-full px-6 py-4 bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/20 transition-all duration-300 text-gray-900 shadow-lg hover:shadow-xl cursor-pointer"
+                        className={`w-full px-6 py-4 bg-white/80 backdrop-blur-sm border-2 rounded-2xl focus:outline-none focus:ring-4 transition-all duration-300 text-gray-900 shadow-lg hover:shadow-xl cursor-pointer ${
+                          role ? 'border-purple-500 focus:ring-purple-500/20' : 'border-gray-300 focus:border-purple-500 focus:ring-purple-500/20'
+                        }`}
                       >
+                        <option value="">Select a role...</option>
                         <option value="student">🎓 Student</option>
                         <option value="teacher">👨‍🏫 Teacher</option>
                       </select>
@@ -352,8 +376,11 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
                           aria-label="Select student section"
                           value={section}
                           onChange={(e) => setSection(e.target.value)}
-                          className="w-full px-6 py-4 bg-white/80 backdrop-blur-sm border-2 border-gray-300 rounded-2xl focus:outline-none focus:border-green-500 focus:ring-4 focus:ring-green-500/20 transition-all duration-300 text-gray-900 shadow-lg hover:shadow-xl cursor-pointer"
+                          className={`w-full px-6 py-4 bg-white/80 backdrop-blur-sm border-2 rounded-2xl focus:outline-none focus:ring-4 transition-all duration-300 text-gray-900 shadow-lg hover:shadow-xl cursor-pointer ${
+                            section ? 'border-green-500 focus:ring-green-500/20' : 'border-gray-300 focus:border-green-500 focus:ring-green-500/20'
+                          }`}
                         >
+                          <option value="">Choose a section...</option>
                           {sections.map((sec) => (
                             <option key={sec} value={sec}>
                               {sec.charAt(0).toUpperCase() + sec.slice(1)}
@@ -517,8 +544,8 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
                 type="button"
                 onClick={() => {
                   setName("");
-                  setRole("student");
-                  setSection("nursery");
+                  setRole("");
+                  setSection("");
                   setCompetition([]);
                   setFormErrors({});
                   setCurrentStep(1);
