@@ -100,6 +100,7 @@ export default function SecretaryDashboard() {
       <main className="flex flex-col items-center justify-center min-h-[80vh] w-full p-4">
         {!showForm && (
           <button
+            type="button"
             onClick={() => setShowForm(true)}
             className="bg-green-600 text-white px-6 py-3 rounded-full text-xl shadow-lg hover:bg-green-700 transition"
           >
