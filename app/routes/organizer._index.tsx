@@ -1,29 +1,28 @@
-import { Link } from "@remix-run/react";
+import { useEffect } from "react";
+import { useNavigate } from "@remix-run/react";
 
 export default function OrganizerIndex() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const secretaryLogin = localStorage.getItem("secretary_login");
+    
+    // Clear secretary login when accessing organizer routes (role switch)
+    if (secretaryLogin) {
+      console.log("Clearing secretary login to allow organizer access");
+      localStorage.removeItem("secretary_login");
+    }
+    
+    // Always redirect to organizer login (force login flow)
+    console.log("Redirecting to organizer login page");
+    navigate("/organizer-login");
+  }, [navigate]);
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-8">
-        <h1 className="text-2xl font-bold text-gray-900 text-center mb-6">
-          Organizer Portal
-        </h1>
-        <p className="text-gray-600 text-center mb-6">
-          Welcome to the Church Registration System Organizer Portal
-        </p>
-        <div className="space-y-4">
-          <Link
-            to="/organizer/dashboard"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition block text-center"
-          >
-            Go to Dashboard
-          </Link>
-          <Link
-            to="/"
-            className="w-full bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300 transition block text-center"
-          >
-            Back to Home
-          </Link>
-        </div>
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Checking access permissions...</p>
       </div>
     </div>
   );

@@ -1,5 +1,16 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "@remix-run/react";
+import { redirect } from "@remix-run/node";
+import type { LoaderFunctionArgs } from "@remix-run/node";
 import { supabase } from "~/utils/supabase.client";
+
+// Server-side protection - redirect immediately if no valid session
+export async function loader({ request }: LoaderFunctionArgs) {
+  // For now, always redirect to login on server-side
+  // The client-side will handle the authentication check
+  // This ensures no content is ever served without proper authentication
+  return null;
+}
 
 interface Participant {
   id: string;
@@ -12,8 +23,11 @@ interface Participant {
 }
 
 export default function OrganizerDashboard() {
+  const navigate = useNavigate();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [isClient, setIsClient] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState({
@@ -21,6 +35,110 @@ export default function OrganizerDashboard() {
     secretaryId: "",
     role: ""
   });
+
+  // IMMEDIATE REDIRECT - Check authentication before any rendering
+  useEffect(() => {
+    // Run immediately when component mounts
+    const immediateCheck = () => {
+      // Only check on client-side
+      if (typeof window === 'undefined') return;
+      
+      const organizerLogin = localStorage.getItem("organizer_login");
+      const secretaryLogin = localStorage.getItem("secretary_login");
+      
+      console.log("🔍 ORGANIZER DASHBOARD ACCESS ATTEMPT");
+      console.log("Secretary login present:", !!secretaryLogin);
+      console.log("Organizer login present:", !!organizerLogin);
+      
+      // CRITICAL: Even if user is secretary, they MUST have organizer credentials to access organizer dashboard
+      if (!organizerLogin) {
+        console.log("🚨 IMMEDIATE REDIRECT: No organizer login found");
+        if (secretaryLogin) {
+          console.log("📝 Secretary is logged in, but organizer dashboard requires passkey");
+        }
+        window.location.href = "/organizer-login";
+        return;
+      }
+      
+      // Validate the organizer login data
+      try {
+        const organizerData = JSON.parse(organizerLogin);
+        if (!organizerData.authorized || organizerData.role !== "organizer") {
+          console.log("🚨 IMMEDIATE REDIRECT: Invalid organizer credentials");
+          localStorage.removeItem("organizer_login");
+          window.location.href = "/organizer-login";
+          return;
+        }
+        
+        // If we reach here, authentication is valid
+        console.log("✅ Organizer authentication valid");
+        setIsClient(true);
+      } catch (error) {
+        console.log("🚨 IMMEDIATE REDIRECT: Error parsing organizer data");
+        localStorage.removeItem("organizer_login");
+        window.location.href = "/organizer-login";
+        return;
+      }
+    };
+
+    immediateCheck();
+  }, []);
+
+  // Secondary authentication check after client is set
+  useEffect(() => {
+    if (!isClient) return;
+    
+    const checkAuthentication = () => {
+      const organizerLogin = localStorage.getItem("organizer_login");
+      const secretaryLogin = localStorage.getItem("secretary_login");
+      
+      console.log("=== ORGANIZER DASHBOARD ACCESS CHECK ===");
+      console.log("Organizer login data:", organizerLogin);
+      console.log("Secretary login data:", secretaryLogin);
+      
+      // STRICT RULE: Organizer dashboard requires ORGANIZER credentials regardless of secretary status
+      if (!organizerLogin) {
+        console.log("❌ No organizer login found - redirecting to organizer login");
+        if (secretaryLogin) {
+          console.log("📝 Note: Secretary is logged in, but organizer dashboard requires separate passkey authorization");
+        }
+        navigate("/organizer-login", { replace: true });
+        return;
+      }
+      
+      // Validate organizer login data
+      try {
+        const organizerData = JSON.parse(organizerLogin);
+        console.log("Parsed organizer data:", organizerData);
+        
+        // Check if the organizer is properly authorized
+        if (!organizerData.authorized || organizerData.role !== "organizer") {
+          console.log("❌ Invalid organizer credentials - redirecting to login");
+          console.log("Authorized:", organizerData.authorized, "Role:", organizerData.role);
+          localStorage.removeItem("organizer_login");
+          navigate("/organizer-login", { replace: true });
+          return;
+        }
+        
+        console.log("✅ Organizer access verified - dashboard access granted");
+        setAuthChecking(false); // Allow dashboard to render
+      } catch (error) {
+        console.error("❌ Error parsing organizer login data:", error);
+        localStorage.removeItem("organizer_login");
+        navigate("/organizer-login", { replace: true });
+        return;
+      }
+      
+      // Clear secretary login when accessing organizer dashboard (role switch)
+      if (secretaryLogin) {
+        console.log("🔄 Clearing secretary login - organizer access granted");
+        localStorage.removeItem("secretary_login");
+      }
+    };
+
+    // Run authentication check
+    checkAuthentication();
+  }, [navigate, isClient]);
 
   useEffect(() => {
     fetchParticipants();
@@ -31,8 +149,8 @@ export default function OrganizerDashboard() {
       setLoading(true);
       
       console.log("=== DEBUGGING ORGANIZER DASHBOARD ===");
-      console.log("Supabase URL:", import.meta.env.VITE_SUPABASE_URL);
-      console.log("Supabase Key exists:", !!import.meta.env.VITE_SUPABASE_ANON_KEY);
+      console.log("Supabase URL:", typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.VITE_SUPABASE_URL : 'Unknown');
+      console.log("Supabase Key exists:", typeof import.meta !== 'undefined' && import.meta.env ? !!import.meta.env.VITE_SUPABASE_ANON_KEY : false);
       
       // Test connection first
       const { data: testConnection, error: connectionError } = await supabase
@@ -135,6 +253,21 @@ export default function OrganizerDashboard() {
           >
             Retry
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading screen while checking authentication OR if not client-side yet
+  if (authChecking || !isClient) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">🔒 Checking Organizer Authorization...</p>
+          <p className="text-xs text-gray-400 mt-2">⚠️ Direct access not allowed - Redirecting to login</p>
+          <p className="text-xs text-red-500 mt-1">Must enter passkey to access organizer dashboard</p>
+          <p className="text-xs text-orange-500 mt-1">📝 Note: Secretaries also need passkey for organizer access</p>
         </div>
       </div>
     );
