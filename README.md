@@ -42,4 +42,3 @@ A comprehensive church registration system built with Remix, TypeScript, and Sup
 │   └── entry.client.tsx
 │
 └── README.md
-```
