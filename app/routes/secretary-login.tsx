@@ -33,10 +33,53 @@ export default function SecretaryLogin() {
     church_id: ""
   });
   const [errors, setErrors] = useState<Partial<LoginForm>>({});
+  const [returningSec, setReturningSec] = useState<{name: string, church: string} | null>(null);
+
+  // Check if this phone number corresponds to an existing secretary
+  const checkExistingSecretary = async (phone: string) => {
+    if (phone.length === 10) {
+      try {
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id, name, phone, church_id")
+          .eq("phone", phone)
+          .single();
+
+        if (existingProfile) {
+          // Get church details
+          const church = churches.find(c => c.id === existingProfile.church_id);
+          if (church) {
+            setReturningSec({
+              name: existingProfile.name,
+              church: `${church.church_name} - ${church.church_place}`
+            });
+            // Auto-fill the form
+            setFormData(prev => ({
+              ...prev,
+              name: existingProfile.name,
+              church_id: existingProfile.church_id
+            }));
+          }
+        } else {
+          setReturningSec(null);
+        }
+      } catch (error) {
+        // Ignore errors, just don't show returning secretary info
+        setReturningSec(null);
+      }
+    } else {
+      setReturningSec(null);
+    }
+  };
 
   // Fetch churches on component mount
   useEffect(() => {
     fetchChurches();
+    
+    // Clear any existing authentication to ensure fresh login
+    localStorage.removeItem("secretary_login");
+    localStorage.removeItem("organizer_login");
+    console.log("🧹 Cleared existing authentication for fresh login");
   }, []);
 
   const fetchChurches = async () => {
@@ -116,6 +159,11 @@ export default function SecretaryLogin() {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
     }
+    
+    // Check for existing secretary when phone number is entered
+    if (field === "phone" && churches.length > 0) {
+      checkExistingSecretary(value);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,8 +193,6 @@ export default function SecretaryLogin() {
       
       if (!selectedChurch) {
         console.error("Selected church not found");
-        console.error("Church ID:", formData.church_id, "Type:", typeof formData.church_id);
-        console.error("Available church IDs:", churches.map(c => ({ id: c.id, type: typeof c.id })));
         alert("Selected church not found. Please try again.");
         setLoading(false);
         return;
@@ -154,24 +200,7 @@ export default function SecretaryLogin() {
 
       console.log("Selected church:", selectedChurch);
 
-      // FIRST: Check if there's already a secretary for this church
-      const { data: existingChurchSecretary, error: churchCheckError } = await supabase
-        .from("profiles")
-        .select("id, name, phone, church_id")
-        .eq("church_id", formData.church_id)
-        .single();
-
-      console.log("Church secretary check:", { existingChurchSecretary, churchCheckError });
-
-      // If there's already a secretary for this church, check if it's the same person
-      if (existingChurchSecretary && existingChurchSecretary.phone !== formData.phone) {
-        console.log("Church already has a secretary:", existingChurchSecretary);
-        alert(`This church already has a registered secretary: ${existingChurchSecretary.name} (${existingChurchSecretary.phone}). Only one secretary per church is allowed.`);
-        setLoading(false);
-        return;
-      }
-
-      // SECOND: Check if profile already exists for this phone number
+      // FIRST: Check if profile already exists for this phone number
       const { data: existingProfile, error: checkError } = await supabase
         .from("profiles")
         .select("id, name, phone, church_id")
@@ -183,36 +212,69 @@ export default function SecretaryLogin() {
       if (checkError && checkError.code !== "PGRST116") {
         // PGRST116 is "not found" error, which is expected for new users
         console.error("Error checking existing profile:", checkError);
-        console.error("Error code:", checkError.code);
-        console.error("Error message:", checkError.message);
-        console.error("Error details:", checkError.details);
-        alert(`Error checking profile: ${checkError.message} (Code: ${checkError.code})`);
+        alert(`Error checking profile: ${checkError.message}`);
         setLoading(false);
         return;
       }
 
-      // Handle church secretary check errors
-      if (churchCheckError && churchCheckError.code !== "PGRST116") {
-        console.error("Error checking church secretary:", churchCheckError);
-        alert(`Error checking church secretary: ${churchCheckError.message}`);
-        setLoading(false);
-        return;
+      let existingChurchSecretary = null;
+
+      // SECOND: Check if there's already a different secretary for this church (only for new users or church switchers)
+      if (!existingProfile || existingProfile.church_id !== formData.church_id) {
+        console.log("Checking church secretary availability for new/switching user");
+        
+        const { data: churchSecretary, error: churchCheckError } = await supabase
+          .from("profiles")
+          .select("id, name, phone, church_id")
+          .eq("church_id", formData.church_id)
+          .single();
+
+        console.log("Church secretary check:", { churchSecretary, churchCheckError });
+
+        // Handle church secretary check errors
+        if (churchCheckError && churchCheckError.code !== "PGRST116") {
+          console.error("Error checking church secretary:", churchCheckError);
+          alert(`Error checking church secretary: ${churchCheckError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        existingChurchSecretary = churchSecretary;
+
+        // Check if there's already a different secretary for this church
+        if (existingChurchSecretary && existingChurchSecretary.phone !== formData.phone) {
+          console.log("❌ Church already has a different secretary:", existingChurchSecretary);
+          alert(`❌ Church Policy Violation\n\nThis church already has a registered secretary:\n• Name: ${existingChurchSecretary.name}\n• Phone: ${existingChurchSecretary.phone}\n\n🔒 Only ONE secretary per church is allowed.\n\nIf you are the authorized secretary for this church, please contact the administrator.`);
+          setLoading(false);
+          return;
+        }
+      } else {
+        console.log("✅ Returning secretary for the same church - allowing direct login");
       }
 
       let profileData;
 
       if (existingProfile) {
-        console.log("Updating existing profile...");
+        console.log("✅ Existing secretary found - processing login...");
         
-        // If user is trying to switch to a different church, check if that church already has a secretary
-        if (existingProfile.church_id !== formData.church_id && existingChurchSecretary) {
-          console.log("User trying to switch to church that already has a secretary");
-          alert(`Cannot switch to this church. ${selectedChurch.church_name} already has a registered secretary: ${existingChurchSecretary.name} (${existingChurchSecretary.phone}). Only one secretary per church is allowed.`);
-          setLoading(false);
-          return;
+        // Check if user is trying to switch to a different church
+        if (existingProfile.church_id !== formData.church_id) {
+          console.log("⚠️ Secretary trying to switch churches");
+          
+          // Check if the new church already has a secretary
+          if (existingChurchSecretary && existingChurchSecretary.phone !== formData.phone) {
+            console.log("❌ Cannot switch - target church already has a secretary");
+            alert(`❌ Cannot Switch Churches\n\nYou cannot switch to ${selectedChurch.church_name} because it already has a registered secretary:\n• Name: ${existingChurchSecretary.name}\n• Phone: ${existingChurchSecretary.phone}\n\n🔒 Only ONE secretary per church is allowed.`);
+            setLoading(false);
+            return;
+          }
+          
+          console.log("✅ Switching churches - updating profile");
+        } else {
+          console.log("✅ Same church - welcome back!");
         }
         
-        // Update existing profile
+        // Update existing profile (handles both name updates and church switches)
         const { data, error: updateError } = await supabase
           .from("profiles")
           .update({
@@ -224,16 +286,25 @@ export default function SecretaryLogin() {
           .single();
 
         if (updateError) {
-          console.error("Error updating profile:", updateError);
+          console.error("❌ Error updating profile:", updateError);
           alert("Failed to update profile. Please try again.");
           setLoading(false);
           return;
         }
         
         profileData = data;
-        console.log("Profile updated successfully:", profileData);
+        console.log("✅ Profile updated successfully:", profileData);
       } else {
-        console.log("Creating new profile...");
+        console.log("🆕 New secretary registration...");
+        
+        // Ensure the church doesn't already have a secretary (should already be checked above)
+        if (existingChurchSecretary) {
+          console.log("❌ Blocking new registration - church already has secretary");
+          alert(`❌ Registration Blocked\n\nThis church already has a registered secretary:\n• Name: ${existingChurchSecretary.name}\n• Phone: ${existingChurchSecretary.phone}\n\n🔒 Only ONE secretary per church is allowed.`);
+          setLoading(false);
+          return;
+        }
+        
         // Create new profile
         const { data, error: insertError } = await supabase
           .from("profiles")
@@ -246,14 +317,14 @@ export default function SecretaryLogin() {
           .single();
 
         if (insertError) {
-          console.error("Error creating profile:", insertError);
+          console.error("❌ Error creating profile:", insertError);
           alert("Failed to create profile. Please try again.");
           setLoading(false);
           return;
         }
         
         profileData = data;
-        console.log("Profile created successfully:", profileData);
+        console.log("✅ Profile created successfully:", profileData);
       }
 
       // Store login info in localStorage for now (in production, use proper auth)
@@ -264,11 +335,19 @@ export default function SecretaryLogin() {
         church: selectedChurch.church_name,
         church_place: selectedChurch.church_place,
         church_id: formData.church_id,
-        loginTime: new Date().toISOString()
+        loginTime: new Date().toISOString(),
+        isReturningSecretary: !!existingProfile // Track if this is a returning secretary
       };
 
       localStorage.setItem("secretary_login", JSON.stringify(loginData));
-      console.log("Login data stored:", loginData);
+      console.log("✅ Login successful:", loginData);
+      
+      // Show appropriate welcome message
+      if (existingProfile) {
+        console.log("🎉 Welcome back, returning secretary!");
+      } else {
+        console.log("🎉 Welcome, new secretary!");
+      }
       
       // Redirect to secretary dashboard
       navigate("/secretary/dashboard");
@@ -379,6 +458,27 @@ export default function SecretaryLogin() {
                     {errors.phone}
                   </p>
                 )}
+                
+                {/* Returning Secretary Detection */}
+                {returningSec && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-start">
+                      <div className="flex-shrink-0">
+                        <svg className="h-5 w-5 text-green-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                      <div className="ml-3">
+                        <h3 className="text-sm font-medium text-green-800">Welcome Back!</h3>
+                        <div className="mt-1 text-sm text-green-700">
+                          <p>Found existing account for <strong>{returningSec.name}</strong></p>
+                          <p>Church: <strong>{returningSec.church}</strong></p>
+                          <p className="text-xs mt-1">✅ Form auto-filled - Click login to continue</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Church Selection */}
@@ -426,6 +526,7 @@ export default function SecretaryLogin() {
                     {errors.church_id}
                   </p>
                 )}
+                
                 {selectedChurch && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
                     <p className="text-sm text-blue-800">
@@ -435,11 +536,6 @@ export default function SecretaryLogin() {
                     </p>
                   </div>
                 )}
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
-                  <p className="text-xs text-yellow-800">
-                    <span className="font-medium">⚠️ Important:</span> Each church can only have one secretary. If a church already has a secretary, you cannot register for that church.
-                  </p>
-                </div>
               </div>
 
               {/* Submit Button */}
@@ -466,15 +562,6 @@ export default function SecretaryLogin() {
 
             {/* Footer */}
             <div className="mt-8 text-center">
-              {/* Test Connection Button */}
-              <button
-                type="button"
-                onClick={testSupabaseConnection}
-                className="mb-4 bg-gray-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-gray-700 transition"
-              >
-                Test Supabase Connection
-              </button>
-              
               <div className="flex items-center justify-center space-x-4 text-sm text-gray-600">
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
