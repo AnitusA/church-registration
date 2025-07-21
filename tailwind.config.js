@@ -1,7 +1,6 @@
-import type { Config } from "tailwindcss";
-
-export default {
-  content: ["./app/**/*.{js,jsx,ts,tsx}"], // ✅ Simpler and reliable
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./app/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       fontFamily: {
@@ -19,4 +18,4 @@ export default {
     },
   },
   plugins: [],
-} satisfies Config;
+};

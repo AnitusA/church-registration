@@ -1,40 +1,44 @@
-# Welcome to Remix!
+# Church Registration System
 
-- 📖 [Remix docs](https://remix.run/docs)
+A comprehensive church registration system built with Remix, TypeScript, and Supabase.
 
-## Development
+## Features
 
-Run the dev server:
+- **Role-based Access Control**: Organizer and Secretary roles with different permissions
+- **Organizer Dashboard**: 
+  - View all participants across all churches
+  - Filter, sort, and paginate data
+  - Export participant data to CSV
+  - Real-time statistics
+- **Secretary Dashboard**: Register participants for their church
+- **Supabase Integration**: Real-time database with authentication
 
-```sh
-npm run dev
+## Project Structure
+
 ```
-
-## Deployment
-
-First, build your app for production:
-
-```sh
-npm run build
-```
-
-Then run the app in production mode:
-
-```sh
-npm start
-```
-
-Now you'll need to pick a host to deploy it to.
-
-### DIY
-
-If you're familiar with deploying Node applications, the built-in Remix app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-- `build/server`
-- `build/client`
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever css framework you prefer. See the [Vite docs on css](https://vitejs.dev/guide/features.html#css) for more information.
+/my-remix-project
+├── .env                         # 🔐 Environment variables (Supabase keys, secrets)
+├── .gitignore                   # Should include `.env`
+├── remix.config.js              # Remix configuration
+├── tailwind.config.js           # Tailwind setup
+├── tsconfig.json                # TypeScript config
+├── package.json
+│
+├── /app
+│   ├── /routes
+│   │   └── /organizer
+│   │       └── dashboard.tsx     # 📊 Organizer-only dashboard route
+│   │
+│   ├── /components
+│   │   ├── DashboardTable.tsx    # 📋 Table with filter, sort, paginate, export
+│   │   └── FilterBar.tsx         # 🔍 Reusable filters component
+│   │
+│   ├── /lib
+│   │   ├── supabase.server.ts    # 🔌 Server-side Supabase client using .env
+│   │   └── auth.ts               # 🔐 Organizer role check / protection
+│   │
+│   ├── root.tsx                  # App layout + outlet
+│   ├── entry.server.tsx
+│   └── entry.client.tsx
+│
+└── README.md
