@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "@remix-run/react";
 import { supabase } from "~/utils/supabase.client";
+import { generateUniqueParticipantId, shouldUpdateParticipantId } from "~/utils/participantId";
 import Sidebar from "~/components/Sidebar";
 import AddParticipantForm from "~/components/AddParticipantForm";
 
@@ -29,6 +30,7 @@ export default function SecretaryDashboard() {
   const [authChecking, setAuthChecking] = useState(true);
   const [isClient, setIsClient] = useState(false);
   const [editingParticipant, setEditingParticipant] = useState<Participant | null>(null);
+  const [editingPreviewId, setEditingPreviewId] = useState<string>("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [secretary, setSecretary] = useState({
     id: "secretary-123", // Default fallback
@@ -140,6 +142,40 @@ export default function SecretaryDashboard() {
     }
   };
 
+  // Update editing preview ID when editing participant changes
+  useEffect(() => {
+    const updateEditingPreviewId = async () => {
+      if (!editingParticipant) {
+        setEditingPreviewId("");
+        return;
+      }
+      
+      try {
+        // Check if participant ID would change based on current role/section
+        const needsNewId = shouldUpdateParticipantId(
+          editingParticipant.participant_id, 
+          editingParticipant.role, 
+          editingParticipant.section || undefined
+        );
+        
+        if (needsNewId) {
+          const newId = await generateUniqueParticipantId(
+            editingParticipant.role, 
+            editingParticipant.section || undefined
+          );
+          setEditingPreviewId(newId);
+        } else {
+          setEditingPreviewId(editingParticipant.participant_id);
+        }
+      } catch (error) {
+        console.error("Error generating preview ID:", error);
+        setEditingPreviewId(editingParticipant?.participant_id || "");
+      }
+    };
+    
+    updateEditingPreviewId();
+  }, [editingParticipant?.role, editingParticipant?.section, editingParticipant?.participant_id]);
+
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
   const handleAddParticipant = async (newParticipant: NewParticipant) => {
@@ -187,7 +223,25 @@ export default function SecretaryDashboard() {
     console.log("Secretary ID:", secretary.id);
     console.log("Participant ID:", updatedParticipant.participant_id);
     
+    // Check if we need to generate a new participant ID due to role/section change
+    const needsNewId = shouldUpdateParticipantId(
+      updatedParticipant.participant_id, 
+      participantToUpdate.role, 
+      participantToUpdate.section || undefined
+    );
+    
+    let newParticipantId = updatedParticipant.participant_id;
+    if (needsNewId) {
+      console.log("🔄 Generating new participant ID due to role/section change");
+      newParticipantId = await generateUniqueParticipantId(
+        participantToUpdate.role, 
+        participantToUpdate.section || undefined
+      );
+      console.log("New participant ID generated:", newParticipantId);
+    }
+    
     const updateData = {
+      participant_id: newParticipantId,
       name: participantToUpdate.name,
       role: participantToUpdate.role,
       section: participantToUpdate.section || null,
@@ -679,6 +733,28 @@ export default function SecretaryDashboard() {
                 <h3 className="text-white font-bold text-lg md:text-xl">Edit Participant</h3>
                 <p className="text-white/90 text-xs md:text-sm">Update participant information</p>
               </div>
+              
+              {/* Participant ID Preview */}
+              {editingPreviewId !== editingParticipant.participant_id && (
+                <div className="mx-4 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">
+                        ID will be updated
+                      </p>
+                      <p className="text-xs text-amber-600">
+                        {editingParticipant.participant_id} → {editingPreviewId}
+                      </p>
+                    </div>
+                    <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 011 1v1a1 1 0 01-1 1H3a1 1 0 01-1-1V5a1 1 0 011-1h4zM9 12l2 2 4-4" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="p-4 md:p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Name</label>

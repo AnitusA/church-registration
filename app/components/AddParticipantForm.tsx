@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { generateUniqueParticipantId } from "~/utils/participantId";
 
 type AddParticipantFormProps = {
   onSave: (participant: {
@@ -50,12 +51,26 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
     if (completion >= 75 && currentStep < 4) setCurrentStep(4);
   }, [name, role, section, competition, currentStep]);
 
-  const generateId = () => {
-    if (!role) return "---";
-    const prefix = role === "teacher" ? "T" : (section ? section[0].toUpperCase() : "S");
-    const count = currentCount + 1;
-    return `${prefix}${String(count).padStart(3, "0")}`;
-  };
+  const [previewId, setPreviewId] = useState("---");
+
+  // Update preview ID when role or section changes
+  useEffect(() => {
+    const updatePreviewId = async () => {
+      if (!role) {
+        setPreviewId("---");
+        return;
+      }
+      try {
+        const id = await generateUniqueParticipantId(role, role === "student" ? section : undefined);
+        setPreviewId(id);
+      } catch (error) {
+        console.error("Error generating preview ID:", error);
+        setPreviewId("---");
+      }
+    };
+    
+    updatePreviewId();
+  }, [role, section]);
 
   const validateForm = () => {
     const errors: {[key: string]: string} = {};
@@ -80,7 +95,8 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
     // Simulate loading for better UX
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    const participantId = generateId();
+    // Generate a fresh participant ID for saving
+    const participantId = await generateUniqueParticipantId(role, role === "student" ? section : undefined);
     onSave({
       name,
       role,
@@ -528,7 +544,7 @@ export default function AddParticipantForm({ onSave, currentCount }: AddParticip
                   <div className="text-right">
                     <div className="relative">
                       <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent bg-white px-6 py-3 rounded-xl shadow-lg border-2 border-white">
-                        {generateId()}
+                        {previewId}
                       </div>
                       <div className="absolute -top-2 -right-2 w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
                     </div>
